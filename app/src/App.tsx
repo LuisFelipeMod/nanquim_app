@@ -9,7 +9,8 @@ import {
 
 import { Sidebar } from "./components/Sidebar";
 import { TabBar } from "./components/TabBar";
-import type { SaveStatus, Tab, TreeNode } from "./types";
+import { MarkdownEditor } from "./components/MarkdownEditor";
+import { fileKind, type FileKind, type SaveStatus, type Tab, type TreeNode } from "./types";
 
 const AUTOSAVE_DEBOUNCE_MS = 1000;
 
@@ -52,6 +53,10 @@ export default function App() {
   const [toasts, setToasts] = useState<{ id: number; text: string }[]>([]);
   const [theme, setTheme] = useState<Theme>(systemTheme);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [dirInfo, setDirInfo] = useState<{
+    path: string;
+    isDefault: boolean;
+  } | null>(null);
   const [fontSize, setFontSize] = useState<number>(() => {
     const saved = Number(localStorage.getItem("ui-font-size"));
     return FONT_SIZES.some((o) => o.value === saved) ? saved : DEFAULT_FONT_SIZE;
@@ -76,6 +81,8 @@ export default function App() {
   }, [theme]);
 
   const scenes = useRef(new Map<string, Scene>());
+  // documentos markdown abertos: texto atual e último texto salvo
+  const mdDocs = useRef(new Map<string, { text: string; savedText: string }>());
   const saveTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const activePathRef = useRef(activePath);
   activePathRef.current = activePath;
@@ -103,6 +110,14 @@ export default function App() {
     refreshTree();
     return window.api.onFsChanged(refreshTree);
   }, [refreshTree]);
+
+  // pasta atual dos desenhos (exibida nas configurações)
+  useEffect(() => {
+    window.api
+      .getDir()
+      .then(setDirInfo)
+      .catch((err) => toast(`Erro ao obter pasta: ${err?.message ?? err}`));
+  }, [toast]);
 
   // carga inicial da biblioteca global
   useEffect(() => {
@@ -183,6 +198,29 @@ export default function App() {
         clearTimeout(timer);
         saveTimers.current.delete(path);
       }
+
+      // documentos markdown: persiste texto puro
+      if (fileKind(path) === "markdown") {
+        const doc = mdDocs.current.get(path);
+        if (!doc) return true;
+        if (doc.text === doc.savedText) {
+          setTabStatus(path, "saved");
+          return true;
+        }
+        setTabStatus(path, "saving");
+        try {
+          await window.api.writeFile(path, doc.text);
+          doc.savedText = doc.text;
+          setTabStatus(path, "saved");
+          return true;
+        } catch (err: any) {
+          const message = err?.message ?? String(err);
+          setTabStatus(path, "error", message);
+          toast(`Falha ao salvar "${baseName(path)}": ${message}`);
+          return false;
+        }
+      }
+
       const scene = scenes.current.get(path);
       if (!scene) return true;
       const json = serializeAsJSON(
@@ -244,14 +282,46 @@ export default function App() {
     [scheduleSave],
   );
 
+  const handleMarkdownChange = useCallback(
+    (path: string, text: string) => {
+      const doc = mdDocs.current.get(path);
+      if (!doc) return;
+      doc.text = text;
+      setTabs((tabs) =>
+        tabs.some((t) => t.path === path && t.status === "saved")
+          ? tabs.map((t) => (t.path === path ? { ...t, status: "dirty" } : t))
+          : tabs,
+      );
+      scheduleSave(path);
+    },
+    [scheduleSave],
+  );
+
   // ---- abas ---------------------------------------------------------------
 
   const openFile = useCallback(
     async (path: string) => {
-      if (scenes.current.has(path)) {
+      if (scenes.current.has(path) || mdDocs.current.has(path)) {
         setActivePath(path);
         return;
       }
+
+      // markdown: carrega texto puro
+      if (fileKind(path) === "markdown") {
+        try {
+          const text = await window.api.readFile(path);
+          mdDocs.current.set(path, { text, savedText: text });
+          setTabs((tabs) => [
+            ...tabs,
+            { path, name: baseName(path), status: "saved" },
+          ]);
+          setActivePath(path);
+        } catch (err: any) {
+          toast(`Erro ao abrir "${baseName(path)}": ${err?.message ?? err}`);
+        }
+        return;
+      }
+
       try {
         const raw = await window.api.readFile(path);
         const data = JSON.parse(raw);
@@ -287,6 +357,7 @@ export default function App() {
         if (!force) return;
       }
       scenes.current.delete(path);
+      mdDocs.current.delete(path);
       saveTimers.current.delete(path);
       setTabs((tabs) => {
         const idx = tabs.findIndex((t) => t.path === path);
@@ -330,6 +401,10 @@ export default function App() {
     for (const [p, scene] of scenes.current) newScenes.set(remap(p), scene);
     scenes.current = newScenes;
 
+    const newDocs = new Map<string, { text: string; savedText: string }>();
+    for (const [p, doc] of mdDocs.current) newDocs.set(remap(p), doc);
+    mdDocs.current = newDocs;
+
     for (const [p, timer] of [...saveTimers.current]) {
       const np = remap(p);
       if (np !== p) {
@@ -351,9 +426,9 @@ export default function App() {
   // ---- operações da sidebar ----------------------------------------------
 
   const handleCreateFile = useCallback(
-    async (dirRel: string) => {
+    async (dirRel: string, kind: FileKind = "excalidraw") => {
       try {
-        const path = await window.api.createFile(dirRel);
+        const path = await window.api.createFile(dirRel, kind);
         await refreshTree();
         await openFile(path);
         setRenamingPath(path);
@@ -382,9 +457,10 @@ export default function App() {
   const handleRename = useCallback(
     async (path: string, newName: string) => {
       setRenamingPath(null);
-      const isFile = path.endsWith(".excalidraw");
-      if (isFile && !newName.endsWith(".excalidraw")) {
-        newName += ".excalidraw";
+      // preserva a extensão do arquivo ao renomear (.excalidraw ou .md)
+      const extMatch = path.match(/\.(excalidraw|md)$/);
+      if (extMatch && !newName.endsWith(extMatch[0])) {
+        newName += extMatch[0];
       }
       if (newName === baseName(path)) return;
       try {
@@ -426,6 +502,7 @@ export default function App() {
         );
         for (const t of affected) {
           scenes.current.delete(t.path);
+          mdDocs.current.delete(t.path);
           const timer = saveTimers.current.get(t.path);
           if (timer) clearTimeout(timer);
           saveTimers.current.delete(t.path);
@@ -461,9 +538,57 @@ export default function App() {
     [refreshTree, toast],
   );
 
+  // ---- troca de pasta de trabalho ----------------------------------------
+
+  /**
+   * Aplica a nova raiz: os caminhos das abas são relativos à pasta antiga,
+   * então descarta o workspace (já salvo antes da troca) e recarrega a árvore.
+   */
+  const applyDirChange = useCallback(
+    async (info: { path: string; isDefault: boolean }) => {
+      for (const timer of saveTimers.current.values()) clearTimeout(timer);
+      saveTimers.current.clear();
+      scenes.current.clear();
+      mdDocs.current.clear();
+      setTabs([]);
+      setActivePath(null);
+      setDirInfo(info);
+      await refreshTree();
+    },
+    [refreshTree],
+  );
+
+  const handleChooseDir = useCallback(async () => {
+    // salva o conteúdo aberto na raiz atual antes de trocar
+    await Promise.all(tabs.map((t) => doSave(t.path)));
+    try {
+      const info = await window.api.chooseDir();
+      if (info) {
+        await applyDirChange(info);
+        toast("Pasta alterada ✓");
+      }
+    } catch (err: any) {
+      toast(`Erro ao trocar pasta: ${err?.message ?? err}`);
+    }
+  }, [tabs, doSave, applyDirChange, toast]);
+
+  const handleResetDir = useCallback(async () => {
+    await Promise.all(tabs.map((t) => doSave(t.path)));
+    try {
+      const info = await window.api.resetDir();
+      await applyDirChange(info);
+      toast("Pasta padrão restaurada ✓");
+    } catch (err: any) {
+      toast(`Erro ao restaurar pasta: ${err?.message ?? err}`);
+    }
+  }, [tabs, doSave, applyDirChange, toast]);
+
   // ---- render --------------------------------------------------------------
 
+  const activeIsMarkdown = activePath ? fileKind(activePath) === "markdown" : false;
   const activeScene = activePath ? scenes.current.get(activePath) : null;
+  const activeMd =
+    activePath && activeIsMarkdown ? mdDocs.current.get(activePath) : null;
 
   // callbacks estáveis: o memo do <Excalidraw> compara props rasamente,
   // arrows inline aqui causariam re-render (e loop com onChange) a cada render
@@ -545,7 +670,14 @@ export default function App() {
           />
         )}
         <div className="editor">
-          {activePath && activeScene && libraryLoaded ? (
+          {activePath && activeMd ? (
+            <MarkdownEditor
+              key={activePath}
+              path={activePath}
+              initialText={activeMd.text}
+              onChange={(text) => handleMarkdownChange(activePath, text)}
+            />
+          ) : activePath && activeScene && libraryLoaded ? (
             <Excalidraw
               key={activePath}
               onExcalidrawAPI={handleExcalidrawApi}
@@ -564,10 +696,18 @@ export default function App() {
           ) : (
             <div className="empty-state">
               <h2>Nenhum arquivo aberto</h2>
-              <p>Selecione um arquivo .excalidraw na barra lateral</p>
-              <button onClick={() => handleCreateFile("")}>
-                + Novo arquivo
-              </button>
+              <p>Crie ou selecione um arquivo na barra lateral</p>
+              <div className="empty-actions">
+                <button onClick={() => handleCreateFile("", "excalidraw")}>
+                  + Novo desenho
+                </button>
+                <button
+                  className="secondary"
+                  onClick={() => handleCreateFile("", "markdown")}
+                >
+                  + Novo markdown
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -584,6 +724,23 @@ export default function App() {
               >
                 ✕
               </button>
+            </div>
+            <div className="modal-section-label">Pasta dos desenhos</div>
+            <div className="dir-setting">
+              <code className="dir-path" title={dirInfo?.path}>
+                {dirInfo?.path ?? "…"}
+                {dirInfo?.isDefault && (
+                  <span className="dir-badge">padrão</span>
+                )}
+              </code>
+              <div className="dir-actions">
+                <button onClick={handleChooseDir}>Escolher pasta…</button>
+                {dirInfo && !dirInfo.isDefault && (
+                  <button className="secondary" onClick={handleResetDir}>
+                    Restaurar padrão
+                  </button>
+                )}
+              </div>
             </div>
             <div className="modal-section-label">
               Tamanho da fonte da interface

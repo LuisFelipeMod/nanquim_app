@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { SaveStatus, Tab } from "../types";
+import { stripExt, type SaveStatus, type Tab } from "../types";
 
 const STATUS_TITLE: Record<SaveStatus, string> = {
   saved: "Salvo",
@@ -51,9 +51,7 @@ export function TabBar(props: TabBarProps) {
             className={`tab-status ${tab.status}`}
             title={STATUS_TITLE[tab.status]}
           />
-          <span className="tab-name">
-            {tab.name.replace(/\.excalidraw$/, "")}
-          </span>
+          <span className="tab-name">{stripExt(tab.name)}</span>
           <button
             className="tab-close"
             title="Fechar"

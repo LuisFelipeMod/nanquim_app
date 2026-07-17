@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { TreeNode } from "../types";
+import { fileKind, stripExt, type FileKind, type TreeNode } from "../types";
 
 type MenuState = {
   x: number;
@@ -13,7 +13,7 @@ type SidebarProps = {
   renamingPath: string | null;
   onStartRename: (path: string | null) => void;
   onOpenFile: (path: string) => void;
-  onCreateFile: (dirRel: string) => void;
+  onCreateFile: (dirRel: string, kind: FileKind) => void;
   onCreateFolder: (dirRel: string) => void;
   onRename: (path: string, newName: string) => void;
   onMove: (srcPath: string, destDir: string) => void;
@@ -23,8 +23,21 @@ type SidebarProps = {
 
 export function Sidebar(props: SidebarProps) {
   const [menu, setMenu] = useState<MenuState | null>(null);
+  const [newMenuOpen, setNewMenuOpen] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [dropTarget, setDropTarget] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!newMenuOpen) return;
+    const close = () => setNewMenuOpen(false);
+    window.addEventListener("click", close);
+    return () => window.removeEventListener("click", close);
+  }, [newMenuOpen]);
+
+  const createInRoot = (kind: FileKind) => {
+    setNewMenuOpen(false);
+    props.onCreateFile("", kind);
+  };
 
   useEffect(() => {
     if (!menu) return;
@@ -112,17 +125,17 @@ export function Sidebar(props: SidebarProps) {
         onContextMenu={(e) => openMenu(e, node)}
         onDragStart={(e) => e.dataTransfer.setData("text/plain", node.path)}
       >
-        <span className="tree-icon">📄</span>
+        <span className="tree-icon">
+          {fileKind(node.path) === "markdown" ? "📝" : "📄"}
+        </span>
         {isRenaming ? (
           <RenameInput
-            initial={node.name.replace(/\.excalidraw$/, "")}
+            initial={stripExt(node.name)}
             onSubmit={(name) => props.onRename(node.path, name)}
             onCancel={() => props.onStartRename(null)}
           />
         ) : (
-          <span className="tree-label">
-            {node.name.replace(/\.excalidraw$/, "")}
-          </span>
+          <span className="tree-label">{stripExt(node.name)}</span>
         )}
       </div>
     );
@@ -141,14 +154,29 @@ export function Sidebar(props: SidebarProps) {
     <aside className="sidebar">
       <div className="sidebar-header">
         <span>ARQUIVOS</span>
-        <div>
-          <button
-            className="icon-btn"
-            title="Novo arquivo"
-            onClick={() => props.onCreateFile("")}
-          >
-            ＋
-          </button>
+        <div className="sidebar-actions">
+          <div className="new-file-wrap">
+            <button
+              className="icon-btn"
+              title="Novo arquivo"
+              onClick={(e) => {
+                e.stopPropagation();
+                setNewMenuOpen((v) => !v);
+              }}
+            >
+              ＋
+            </button>
+            {newMenuOpen && (
+              <div className="new-file-menu" onClick={(e) => e.stopPropagation()}>
+                <button onClick={() => createInRoot("excalidraw")}>
+                  <span className="tree-icon">📄</span> Desenho (Excalidraw)
+                </button>
+                <button onClick={() => createInRoot("markdown")}>
+                  <span className="tree-icon">📝</span> Markdown
+                </button>
+              </div>
+            )}
+          </div>
           <button
             className="icon-btn"
             title="Nova pasta"
@@ -191,8 +219,11 @@ export function Sidebar(props: SidebarProps) {
           )}
           {menu.node?.type === "folder" && (
             <>
-              <button onClick={() => props.onCreateFile(menuDir)}>
-                Novo arquivo
+              <button onClick={() => props.onCreateFile(menuDir, "excalidraw")}>
+                Novo desenho
+              </button>
+              <button onClick={() => props.onCreateFile(menuDir, "markdown")}>
+                Novo markdown
               </button>
               <button onClick={() => props.onCreateFolder(menuDir)}>
                 Nova subpasta
@@ -210,8 +241,11 @@ export function Sidebar(props: SidebarProps) {
           )}
           {menu.node == null && (
             <>
-              <button onClick={() => props.onCreateFile("")}>
-                Novo arquivo
+              <button onClick={() => props.onCreateFile("", "excalidraw")}>
+                Novo desenho
+              </button>
+              <button onClick={() => props.onCreateFile("", "markdown")}>
+                Novo markdown
               </button>
               <button onClick={() => props.onCreateFolder("")}>
                 Nova pasta

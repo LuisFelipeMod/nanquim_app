@@ -3,6 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "description": "Gerenciador de arquivos .excalidraw com editor embarcado",
+  "author": "Luis Modesto <luisgmodesto12@gmail.com>",
+  "homepage": "https://github.com/LuisFelipeMod/excalidraw_manager",
   "main": "electron/main.js",
   "scripts": {
     "dev": "concurrently -k -s first \"vite\" \"wait-on tcp:127.0.0.1:5173 && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electron .\"",
@@ -11,6 +13,8 @@
     "dist": "npm run build && electron-builder"
   },
   "dependencies": {
+    "dompurify": "^3.4.12",
+    "marked": "^18.0.6",
     "react": "19.0.0",
     "react-dom": "19.0.0"
   },
@@ -38,7 +42,12 @@
       "output": "release"
     },
     "linux": {
-      "target": "AppImage"
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "icon": "build/icon.png",
+      "category": "Graphics"
     }
   }
 }

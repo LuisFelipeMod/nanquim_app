@@ -1,10 +1,58 @@
-const { app, BrowserWindow, ipcMain, shell, net } = require("electron");
+const { app, BrowserWindow, ipcMain, shell, net, dialog } = require("electron");
 const path = require("path");
 const fs = require("fs");
 const fsp = fs.promises;
 
-// ./uploads na raiz do projeto (um nível acima de ./app)
-const UPLOADS_ROOT = path.resolve(app.getAppPath(), "..", "uploads");
+// Empacotado, o app roda de um bundle somente-leitura (squashfs do AppImage),
+// então os desenhos ficam no diretório de documentos do usuário.
+// Em dev, ./uploads na raiz do projeto (um nível acima de ./app).
+const DEFAULT_UPLOADS_ROOT = app.isPackaged
+  ? path.join(app.getPath("documents"), "Excalidraw Manager")
+  : path.resolve(app.getAppPath(), "..", "uploads");
+
+// Config do app (persiste a pasta escolhida pelo usuário).
+const CONFIG_FILE = path.join(app.getPath("userData"), "config.json");
+
+// Raiz dos desenhos: começa no padrão e pode ser trocada em runtime.
+let uploadsRoot = DEFAULT_UPLOADS_ROOT;
+
+function loadConfig() {
+  try {
+    const cfg = JSON.parse(fs.readFileSync(CONFIG_FILE, "utf8"));
+    if (cfg && typeof cfg.uploadsRoot === "string" && cfg.uploadsRoot) {
+      uploadsRoot = cfg.uploadsRoot;
+    }
+  } catch {
+    // sem config ou inválida: mantém o padrão
+  }
+}
+
+function saveConfig() {
+  try {
+    // só grava override quando difere do padrão
+    const cfg =
+      uploadsRoot === DEFAULT_UPLOADS_ROOT ? {} : { uploadsRoot };
+    fs.writeFileSync(CONFIG_FILE, JSON.stringify(cfg, null, 2), "utf8");
+  } catch {
+    // falha ao persistir não deve derrubar o app
+  }
+}
+
+function dirInfo() {
+  return { path: uploadsRoot, isDefault: uploadsRoot === DEFAULT_UPLOADS_ROOT };
+}
+
+/** Troca a raiz dos desenhos, recria o watcher e notifica o renderer. */
+async function setUploadsRoot(dir) {
+  uploadsRoot = dir;
+  await fsp.mkdir(uploadsRoot, { recursive: true });
+  saveConfig();
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    startWatcher(mainWindow);
+    mainWindow.webContents.send("fs:changed");
+  }
+  return dirInfo();
+}
 
 const LIBRARY_SITE_ORIGIN = "https://libraries.excalidraw.com";
 // biblioteca global (compartilhada entre todos os arquivos)
@@ -27,19 +75,19 @@ const EMPTY_SCENE = JSON.stringify(
 );
 
 /**
- * Resolve um caminho relativo dentro de UPLOADS_ROOT, rejeitando
+ * Resolve um caminho relativo dentro de uploadsRoot, rejeitando
  * qualquer tentativa de escapar do diretório (path traversal).
  */
 function safePath(rel) {
-  const abs = path.resolve(UPLOADS_ROOT, rel || ".");
-  if (abs !== UPLOADS_ROOT && !abs.startsWith(UPLOADS_ROOT + path.sep)) {
+  const abs = path.resolve(uploadsRoot, rel || ".");
+  if (abs !== uploadsRoot && !abs.startsWith(uploadsRoot + path.sep)) {
     throw new Error(`Caminho fora de uploads: ${rel}`);
   }
   return abs;
 }
 
 function relPath(abs) {
-  return path.relative(UPLOADS_ROOT, abs).split(path.sep).join("/");
+  return path.relative(uploadsRoot, abs).split(path.sep).join("/");
 }
 
 async function scanDir(dir) {
@@ -55,7 +103,10 @@ async function scanDir(dir) {
         path: relPath(abs),
         children: await scanDir(abs),
       });
-    } else if (entry.isFile() && entry.name.endsWith(".excalidraw")) {
+    } else if (
+      entry.isFile() &&
+      (entry.name.endsWith(".excalidraw") || entry.name.endsWith(".md"))
+    ) {
       nodes.push({ type: "file", name: entry.name, path: relPath(abs) });
     }
   }
@@ -172,7 +223,21 @@ function openLibraryWindow(url) {
 }
 
 function registerIpc() {
-  ipcMain.handle("fs:tree", () => scanDir(UPLOADS_ROOT));
+  ipcMain.handle("fs:tree", () => scanDir(uploadsRoot));
+
+  ipcMain.handle("dir:get", () => dirInfo());
+
+  ipcMain.handle("dir:choose", async () => {
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: "Escolher pasta dos desenhos",
+      defaultPath: uploadsRoot,
+      properties: ["openDirectory", "createDirectory"],
+    });
+    if (result.canceled || result.filePaths.length === 0) return null;
+    return setUploadsRoot(result.filePaths[0]);
+  });
+
+  ipcMain.handle("dir:reset", () => setUploadsRoot(DEFAULT_UPLOADS_ROOT));
 
   ipcMain.handle("library:get", async () => {
     try {
@@ -197,9 +262,11 @@ function registerIpc() {
     atomicWrite(safePath(rel), content),
   );
 
-  ipcMain.handle("fs:create-file", async (_e, dirRel) => {
-    const abs = await uniquePath(safePath(dirRel), "Sem título", ".excalidraw");
-    await atomicWrite(abs, EMPTY_SCENE);
+  ipcMain.handle("fs:create-file", async (_e, dirRel, kind = "excalidraw") => {
+    const isMarkdown = kind === "markdown";
+    const ext = isMarkdown ? ".md" : ".excalidraw";
+    const abs = await uniquePath(safePath(dirRel), "Sem título", ext);
+    await atomicWrite(abs, isMarkdown ? "" : EMPTY_SCENE);
     return relPath(abs);
   });
 
@@ -241,12 +308,9 @@ function registerIpc() {
 
   ipcMain.handle("fs:duplicate", async (_e, rel) => {
     const src = safePath(rel);
-    const base = path.basename(src, ".excalidraw");
-    const abs = await uniquePath(
-      path.dirname(src),
-      `${base} (cópia)`,
-      ".excalidraw",
-    );
+    const ext = path.extname(src); // ".excalidraw" ou ".md"
+    const base = path.basename(src, ext);
+    const abs = await uniquePath(path.dirname(src), `${base} (cópia)`, ext);
     await fsp.copyFile(src, abs);
     return relPath(abs);
   });
@@ -257,7 +321,23 @@ function registerIpc() {
  * fs.watch recursivo pode não estar disponível em algumas plataformas;
  * nesse caso cai para polling comparando a árvore.
  */
+let watcher = null;
+let watchPoll = null;
+
+/** Encerra o watcher/polling atual (usado ao trocar a raiz). */
+function stopWatcher() {
+  if (watcher) {
+    watcher.close();
+    watcher = null;
+  }
+  if (watchPoll) {
+    clearInterval(watchPoll);
+    watchPoll = null;
+  }
+}
+
 function startWatcher(win) {
+  stopWatcher();
   let timer = null;
   const notify = () => {
     clearTimeout(timer);
@@ -266,12 +346,12 @@ function startWatcher(win) {
     }, 300);
   };
   try {
-    fs.watch(UPLOADS_ROOT, { recursive: true }, notify);
+    watcher = fs.watch(uploadsRoot, { recursive: true }, notify);
   } catch {
     let last = null;
-    setInterval(async () => {
+    watchPoll = setInterval(async () => {
       try {
-        const snapshot = JSON.stringify(await scanDir(UPLOADS_ROOT));
+        const snapshot = JSON.stringify(await scanDir(uploadsRoot));
         if (last !== null && snapshot !== last) notify();
         last = snapshot;
       } catch {}
@@ -334,7 +414,14 @@ function createWindow() {
 }
 
 app.whenReady().then(async () => {
-  await fsp.mkdir(UPLOADS_ROOT, { recursive: true });
+  loadConfig();
+  // se a pasta salva estiver inacessível (drive removido etc.), volta ao padrão
+  try {
+    await fsp.mkdir(uploadsRoot, { recursive: true });
+  } catch {
+    uploadsRoot = DEFAULT_UPLOADS_ROOT;
+    await fsp.mkdir(uploadsRoot, { recursive: true });
+  }
   registerIpc();
   createWindow();
 

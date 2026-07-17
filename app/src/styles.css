@@ -497,3 +497,322 @@ body,
   color: var(--text-muted);
   margin-top: 2px;
 }
+
+.dir-setting {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.dir-path {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-row-active);
+  font-size: calc(var(--ui-font) - 1px);
+  word-break: break-all;
+}
+
+.dir-badge {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: calc(var(--ui-font) - 3px);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.dir-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.dir-actions button {
+  padding: 7px 12px;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+}
+
+.dir-actions button:hover {
+  filter: brightness(1.08);
+}
+
+.dir-actions button.secondary {
+  background: transparent;
+  color: var(--text);
+  border-color: var(--border);
+}
+
+.dir-actions button.secondary:hover {
+  background: var(--bg-menu-hover);
+  filter: none;
+}
+
+/* ---- dropdown "novo arquivo" na sidebar ---- */
+
+.sidebar-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.new-file-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.new-file-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  z-index: 1200;
+  min-width: 190px;
+  background: var(--bg-menu);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+}
+
+.new-file-menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text);
+  font-size: calc(var(--ui-font) - 1px);
+  text-align: left;
+  cursor: pointer;
+}
+
+.new-file-menu button:hover {
+  background: var(--bg-menu-hover);
+}
+
+/* ---- empty state com duas opções ---- */
+
+.empty-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.empty-state button.secondary {
+  background: transparent;
+}
+
+/* ---- editor markdown ---- */
+
+.md-editor {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-app);
+}
+
+.md-toolbar {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.md-modes {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.md-modes button {
+  padding: 5px 14px;
+  border: none;
+  border-right: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: calc(var(--ui-font) - 1px);
+}
+
+.md-modes button:last-child {
+  border-right: none;
+}
+
+.md-modes button:hover {
+  background: var(--bg-menu-hover);
+}
+
+.md-modes button.selected {
+  background: var(--accent);
+  color: #fff;
+}
+
+.md-panes {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+.md-input {
+  flex: 1;
+  min-width: 0;
+  resize: none;
+  border: none;
+  outline: none;
+  padding: 16px 20px;
+  background: var(--bg-app);
+  color: var(--text);
+  font-family: ui-monospace, "Cascadia Code", "Fira Code", Menlo, Consolas,
+    monospace;
+  font-size: 14px;
+  line-height: 1.6;
+  tab-size: 2;
+}
+
+.md-panes.split .md-input {
+  border-right: 1px solid var(--border);
+}
+
+.md-preview {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  padding: 16px 24px;
+}
+
+/* ---- tipografia do markdown renderizado ---- */
+
+.markdown-body {
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.7;
+  word-wrap: break-word;
+}
+
+.markdown-body > *:first-child {
+  margin-top: 0;
+}
+
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3,
+.markdown-body h4 {
+  margin: 1.4em 0 0.5em;
+  line-height: 1.3;
+  font-weight: 600;
+}
+
+.markdown-body h1 {
+  font-size: 1.8em;
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid var(--border);
+}
+
+.markdown-body h2 {
+  font-size: 1.45em;
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid var(--border);
+}
+
+.markdown-body h3 {
+  font-size: 1.2em;
+}
+
+.markdown-body p,
+.markdown-body ul,
+.markdown-body ol,
+.markdown-body blockquote,
+.markdown-body table {
+  margin: 0 0 1em;
+}
+
+.markdown-body ul,
+.markdown-body ol {
+  padding-left: 1.6em;
+}
+
+.markdown-body li + li {
+  margin-top: 0.25em;
+}
+
+.markdown-body a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.markdown-body a:hover {
+  text-decoration: underline;
+}
+
+.markdown-body code {
+  font-family: ui-monospace, "Cascadia Code", Menlo, Consolas, monospace;
+  font-size: 0.88em;
+  background: var(--bg-sidebar);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.12em 0.4em;
+}
+
+.markdown-body pre {
+  background: var(--bg-sidebar);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  overflow-x: auto;
+  margin: 0 0 1em;
+}
+
+.markdown-body pre code {
+  background: transparent;
+  border: none;
+  padding: 0;
+  font-size: 0.85em;
+}
+
+.markdown-body blockquote {
+  border-left: 3px solid var(--border);
+  padding: 0.2em 0 0.2em 1em;
+  color: var(--text-muted);
+}
+
+.markdown-body table {
+  border-collapse: collapse;
+  display: block;
+  overflow-x: auto;
+}
+
+.markdown-body th,
+.markdown-body td {
+  border: 1px solid var(--border);
+  padding: 6px 12px;
+}
+
+.markdown-body th {
+  background: var(--bg-sidebar);
+  font-weight: 600;
+}
+
+.markdown-body hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 1.5em 0;
+}
+
+.markdown-body img {
+  max-width: 100%;
+}

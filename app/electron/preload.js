@@ -2,9 +2,13 @@ const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("api", {
   getTree: () => ipcRenderer.invoke("fs:tree"),
+  getDir: () => ipcRenderer.invoke("dir:get"),
+  chooseDir: () => ipcRenderer.invoke("dir:choose"),
+  resetDir: () => ipcRenderer.invoke("dir:reset"),
   readFile: (rel) => ipcRenderer.invoke("fs:read", rel),
   writeFile: (rel, content) => ipcRenderer.invoke("fs:write", rel, content),
-  createFile: (dirRel) => ipcRenderer.invoke("fs:create-file", dirRel),
+  createFile: (dirRel, kind) =>
+    ipcRenderer.invoke("fs:create-file", dirRel, kind),
   createFolder: (dirRel) => ipcRenderer.invoke("fs:create-folder", dirRel),
   renameEntry: (rel, newName) => ipcRenderer.invoke("fs:rename", rel, newName),
   moveEntry: (srcRel, destDirRel) =>
