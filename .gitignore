@@ -2,7 +2,6 @@
 app/node_modules/
 app/dist/
 app/release/
-app/.env
 
 # --- base de código do Excalidraw (repositório próprio) ---
 # Tem .git próprio e não pode ser commitado como arquivos normais.
