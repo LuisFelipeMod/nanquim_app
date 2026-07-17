@@ -15,6 +15,8 @@ contextBridge.exposeInMainWorld("api", {
     ipcRenderer.invoke("fs:move", srcRel, destDirRel),
   deleteEntry: (rel) => ipcRenderer.invoke("fs:delete", rel),
   duplicateFile: (rel) => ipcRenderer.invoke("fs:duplicate", rel),
+  exportMarkdownPdf: (rel, html) =>
+    ipcRenderer.invoke("md:export-pdf", rel, html),
   onFsChanged: (callback) => {
     const listener = () => callback();
     ipcRenderer.on("fs:changed", listener);
@@ -35,4 +37,9 @@ contextBridge.exposeInMainWorld("api", {
   windowMinimize: () => ipcRenderer.send("window:minimize"),
   windowToggleMaximize: () => ipcRenderer.send("window:toggle-maximize"),
   windowClose: () => ipcRenderer.send("window:close"),
+  auth: {
+    login: () => ipcRenderer.invoke("auth:login"),
+    logout: () => ipcRenderer.invoke("auth:logout"),
+    status: () => ipcRenderer.invoke("auth:status"),
+  },
 });

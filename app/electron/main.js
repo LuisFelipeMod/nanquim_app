@@ -2,12 +2,13 @@ const { app, BrowserWindow, ipcMain, shell, net, dialog } = require("electron");
 const path = require("path");
 const fs = require("fs");
 const fsp = fs.promises;
+const googleAuth = require("./googleAuth");
 
 // Empacotado, o app roda de um bundle somente-leitura (squashfs do AppImage),
 // então os desenhos ficam no diretório de documentos do usuário.
 // Em dev, ./uploads na raiz do projeto (um nível acima de ./app).
 const DEFAULT_UPLOADS_ROOT = app.isPackaged
-  ? path.join(app.getPath("documents"), "Excalidraw Manager")
+  ? path.join(app.getPath("documents"), "Nanquim")
   : path.resolve(app.getAppPath(), "..", "uploads");
 
 // Config do app (persiste a pasta escolhida pelo usuário).
@@ -65,7 +66,7 @@ const EMPTY_SCENE = JSON.stringify(
   {
     type: "excalidraw",
     version: 2,
-    source: "excalidraw-manager",
+    source: "nanquim",
     elements: [],
     appState: { viewBackgroundColor: "#ffffff" },
     files: {},
@@ -186,7 +187,7 @@ function openLibraryWindow(url) {
   libraryWindow = new BrowserWindow({
     width: 1100,
     height: 800,
-    title: "Bibliotecas — Excalidraw Manager",
+    title: "Bibliotecas — Nanquim",
     webPreferences: { sandbox: true },
   });
   libraryWindow.on("closed", () => (libraryWindow = null));
@@ -314,6 +315,56 @@ function registerIpc() {
     await fsp.copyFile(src, abs);
     return relPath(abs);
   });
+
+  ipcMain.handle("md:export-pdf", (_e, rel, html) => exportPdf(rel, html));
+
+  // ---- conta Google (login / Drive) --------------------------------------
+  ipcMain.handle("auth:login", () => googleAuth.login());
+  ipcMain.handle("auth:logout", () => googleAuth.logout());
+  ipcMain.handle("auth:status", () => googleAuth.getStatus());
+}
+
+/**
+ * Gera um PDF a partir de um documento HTML já estilizado (renderizado do
+ * markdown no renderer). Abre um diálogo de "Salvar como" e imprime numa
+ * janela oculta via webContents.printToPDF. Retorna o caminho salvo ou null
+ * se o usuário cancelar.
+ */
+async function exportPdf(rel, html) {
+  const abs = safePath(rel);
+  const base = path.basename(abs, path.extname(abs));
+
+  const result = await dialog.showSaveDialog(mainWindow, {
+    title: "Exportar PDF",
+    defaultPath: path.join(path.dirname(abs), `${base}.pdf`),
+    filters: [{ name: "PDF", extensions: ["pdf"] }],
+  });
+  if (result.canceled || !result.filePath) return null;
+
+  const pdfWin = new BrowserWindow({
+    show: false,
+    webPreferences: { sandbox: true, javascript: false },
+  });
+  try {
+    await pdfWin.loadURL(
+      "data:text/html;charset=utf-8," + encodeURIComponent(html),
+    );
+    const pdf = await pdfWin.webContents.printToPDF({
+      printBackground: true,
+      pageSize: "A4",
+      margins: {
+        marginType: "custom",
+        top: 0.6,
+        bottom: 0.6,
+        left: 0.6,
+        right: 0.6,
+      },
+    });
+    await fsp.writeFile(result.filePath, pdf);
+    return result.filePath;
+  } finally {
+    if (!pdfWin.isDestroyed()) pdfWin.destroy();
+  }
 }
 
 /**
@@ -363,7 +414,7 @@ function createWindow() {
   const win = (mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
-    title: "Excalidraw Manager",
+    title: "Nanquim",
     frame: false, // barra de título/menu nativos removidos; UI própria na topbar
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),

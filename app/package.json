@@ -1,8 +1,8 @@
 {
-  "name": "excalidraw-manager",
+  "name": "nanquim",
   "version": "0.1.0",
   "private": true,
-  "description": "Gerenciador de arquivos .excalidraw com editor embarcado",
+  "description": "Nanquim — gerenciador e editor de desenhos Excalidraw e notas Markdown",
   "author": "Luis Modesto <luisgmodesto12@gmail.com>",
   "homepage": "https://github.com/LuisFelipeMod/excalidraw_manager",
   "main": "electron/main.js",
@@ -32,8 +32,8 @@
     "wait-on": "^8.0.1"
   },
   "build": {
-    "appId": "com.luismodesto.excalidraw-manager",
-    "productName": "Excalidraw Manager",
+    "appId": "com.luismodesto.nanquim",
+    "productName": "Nanquim",
     "files": [
       "dist/**",
       "electron/**"

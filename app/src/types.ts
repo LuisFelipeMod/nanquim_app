@@ -31,6 +31,13 @@ export type DirInfo = {
   isDefault: boolean;
 };
 
+export type GoogleAuthStatus = {
+  /** true quando GOOGLE_CLIENT_ID/SECRET estão definidos no .env. */
+  configured: boolean;
+  loggedIn: boolean;
+  email: string | null;
+};
+
 export type ElectronAPI = {
   getTree: () => Promise<TreeNode[]>;
   getDir: () => Promise<DirInfo>;
@@ -45,6 +52,8 @@ export type ElectronAPI = {
   moveEntry: (srcRel: string, destDirRel: string) => Promise<string>;
   deleteEntry: (rel: string) => Promise<void>;
   duplicateFile: (rel: string) => Promise<string>;
+  /** Exporta o HTML renderizado como PDF; resolve com o caminho salvo ou null. */
+  exportMarkdownPdf: (rel: string, html: string) => Promise<string | null>;
   onFsChanged: (callback: () => void) => () => void;
   libraryGet: () => Promise<string | null>;
   librarySave: (json: string) => Promise<void>;
@@ -53,6 +62,12 @@ export type ElectronAPI = {
   windowMinimize: () => void;
   windowToggleMaximize: () => void;
   windowClose: () => void;
+  auth: {
+    /** Abre a tela de consentimento do Google no navegador do sistema. */
+    login: () => Promise<GoogleAuthStatus>;
+    logout: () => Promise<GoogleAuthStatus>;
+    status: () => Promise<GoogleAuthStatus>;
+  };
 };
 
 declare global {

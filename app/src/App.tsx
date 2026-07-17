@@ -10,7 +10,14 @@ import {
 import { Sidebar } from "./components/Sidebar";
 import { TabBar } from "./components/TabBar";
 import { MarkdownEditor } from "./components/MarkdownEditor";
-import { fileKind, type FileKind, type SaveStatus, type Tab, type TreeNode } from "./types";
+import {
+  fileKind,
+  type FileKind,
+  type GoogleAuthStatus,
+  type SaveStatus,
+  type Tab,
+  type TreeNode,
+} from "./types";
 
 const AUTOSAVE_DEBOUNCE_MS = 1000;
 
@@ -57,6 +64,8 @@ export default function App() {
     path: string;
     isDefault: boolean;
   } | null>(null);
+  const [googleAuth, setGoogleAuth] = useState<GoogleAuthStatus | null>(null);
+  const [authBusy, setAuthBusy] = useState(false);
   const [fontSize, setFontSize] = useState<number>(() => {
     const saved = Number(localStorage.getItem("ui-font-size"));
     return FONT_SIZES.some((o) => o.value === saved) ? saved : DEFAULT_FONT_SIZE;
@@ -117,6 +126,39 @@ export default function App() {
       .getDir()
       .then(setDirInfo)
       .catch((err) => toast(`Erro ao obter pasta: ${err?.message ?? err}`));
+  }, [toast]);
+
+  // estado da conta Google (login para sincronizar com o Drive)
+  useEffect(() => {
+    window.api.auth
+      .status()
+      .then(setGoogleAuth)
+      .catch((err) => toast(`Erro ao obter conta Google: ${err?.message ?? err}`));
+  }, [toast]);
+
+  const handleGoogleLogin = useCallback(async () => {
+    setAuthBusy(true);
+    try {
+      const status = await window.api.auth.login();
+      setGoogleAuth(status);
+      toast(`Conectado ao Google${status.email ? ` como ${status.email}` : ""} ✓`);
+    } catch (err: any) {
+      toast(`Erro ao entrar no Google: ${err?.message ?? err}`);
+    } finally {
+      setAuthBusy(false);
+    }
+  }, [toast]);
+
+  const handleGoogleLogout = useCallback(async () => {
+    setAuthBusy(true);
+    try {
+      setGoogleAuth(await window.api.auth.logout());
+      toast("Conta Google desconectada");
+    } catch (err: any) {
+      toast(`Erro ao sair do Google: ${err?.message ?? err}`);
+    } finally {
+      setAuthBusy(false);
+    }
   }, [toast]);
 
   // carga inicial da biblioteca global
@@ -295,6 +337,18 @@ export default function App() {
       scheduleSave(path);
     },
     [scheduleSave],
+  );
+
+  const handleExportPdf = useCallback(
+    async (path: string, html: string) => {
+      try {
+        const saved = await window.api.exportMarkdownPdf(path, html);
+        if (saved) toast(`PDF exportado ✓`);
+      } catch (err: any) {
+        toast(`Erro ao exportar PDF: ${err?.message ?? err}`);
+      }
+    },
+    [toast],
   );
 
   // ---- abas ---------------------------------------------------------------
@@ -620,6 +674,19 @@ export default function App() {
         >
           ⚙
         </button>
+        {googleAuth?.configured && (
+          <button
+            className={`icon-btn${googleAuth.loggedIn ? " logged-in" : ""}`}
+            title={
+              googleAuth.loggedIn
+                ? `Google: ${googleAuth.email ?? "conectado"}`
+                : "Entrar com Google"
+            }
+            onClick={() => setSettingsOpen(true)}
+          >
+            {googleAuth.loggedIn ? "🟢" : "👤"}
+          </button>
+        )}
         <TabBar
           tabs={tabs}
           activePath={activePath}
@@ -676,6 +743,7 @@ export default function App() {
               path={activePath}
               initialText={activeMd.text}
               onChange={(text) => handleMarkdownChange(activePath, text)}
+              onExportPdf={(html) => handleExportPdf(activePath, html)}
             />
           ) : activePath && activeScene && libraryLoaded ? (
             <Excalidraw
@@ -683,7 +751,7 @@ export default function App() {
               onExcalidrawAPI={handleExcalidrawApi}
               theme={theme}
               langCode="pt-BR"
-              libraryReturnUrl="https://excalidraw-manager.app/"
+              libraryReturnUrl="https://nanquim.app/"
               initialData={{
                 elements: activeScene.elements as any,
                 appState: activeScene.appState,
@@ -724,6 +792,40 @@ export default function App() {
               >
                 ✕
               </button>
+            </div>
+            <div className="modal-section-label">Conta Google</div>
+            <div className="google-setting">
+              {!googleAuth?.configured ? (
+                <p className="google-hint">
+                  Login com Google indisponível: defina{" "}
+                  <code>GOOGLE_CLIENT_ID</code> e{" "}
+                  <code>GOOGLE_CLIENT_SECRET</code> em{" "}
+                  <code>app/.env.local</code>.
+                </p>
+              ) : googleAuth.loggedIn ? (
+                <div className="google-account">
+                  <span className="google-status">
+                    <span className="google-dot" /> Conectado
+                    {googleAuth.email ? ` como ${googleAuth.email}` : ""}
+                  </span>
+                  <button
+                    className="secondary"
+                    disabled={authBusy}
+                    onClick={handleGoogleLogout}
+                  >
+                    Sair
+                  </button>
+                </div>
+              ) : (
+                <div className="google-account">
+                  <span className="google-status muted">
+                    Entre para sincronizar seus documentos com o Google Drive.
+                  </span>
+                  <button disabled={authBusy} onClick={handleGoogleLogin}>
+                    {authBusy ? "Aguardando…" : "Entrar com Google"}
+                  </button>
+                </div>
+              )}
             </div>
             <div className="modal-section-label">Pasta dos desenhos</div>
             <div className="dir-setting">

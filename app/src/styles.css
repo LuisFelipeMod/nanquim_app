@@ -498,6 +498,57 @@ body,
   margin-top: 2px;
 }
 
+.google-setting {
+  margin-bottom: 18px;
+}
+
+.google-account {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-row-active);
+}
+
+.google-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: calc(var(--ui-font) - 1px);
+}
+
+.google-status.muted {
+  color: var(--text-muted);
+}
+
+.google-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #22c55e;
+  flex: none;
+}
+
+.google-hint {
+  margin: 0;
+  font-size: calc(var(--ui-font) - 1px);
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.google-hint code {
+  background: var(--bg-row-active);
+  padding: 1px 4px;
+  border-radius: 4px;
+}
+
+.icon-btn.logged-in {
+  font-size: calc(var(--ui-font) - 3px);
+}
+
 .dir-setting {
   display: flex;
   flex-direction: column;
@@ -630,6 +681,27 @@ body,
   align-items: center;
   padding: 8px 12px;
   border-bottom: 1px solid var(--border);
+}
+
+.md-export-btn {
+  margin-left: auto;
+  padding: 5px 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: calc(var(--ui-font) - 1px);
+}
+
+.md-export-btn:hover:not(:disabled) {
+  background: var(--bg-menu-hover);
+  color: var(--text);
+}
+
+.md-export-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
 }
 
 .md-modes {
