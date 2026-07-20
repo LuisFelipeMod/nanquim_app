@@ -40,6 +40,32 @@ export type GoogleAuthStatus = {
   email: string | null;
 };
 
+/** Repositório Git usado para versionar/sincronizar os documentos. */
+export type GitConfig = {
+  /** URL do remote "origin"; vazia = sincronização desligada. */
+  remoteUrl: string;
+  branch: string;
+};
+
+export type GitStatus = GitConfig & {
+  /** true quando há uma URL de repositório salva. */
+  configured: boolean;
+  /** true quando a pasta dos documentos já é um repositório Git. */
+  isRepo: boolean;
+  currentBranch: string | null;
+  /** Nº de arquivos modificados/não rastreados aguardando sincronização. */
+  pendingChanges: number;
+  lastCommit: string | null;
+  error: string | null;
+};
+
+export type GitSyncResult = {
+  /** false quando não havia nada novo para commitar (só houve push). */
+  committed: boolean;
+  message: string | null;
+  branch: string;
+};
+
 export type ElectronAPI = {
   getTree: () => Promise<TreeNode[]>;
   getDir: () => Promise<DirInfo>;
@@ -82,6 +108,14 @@ export type ElectronAPI = {
   drive: {
     /** Envia (cria ou atualiza) o documento local no Google Drive. */
     push: (rel: string) => Promise<{ fileId: string }>;
+  };
+  git: {
+    getConfig: () => Promise<GitConfig>;
+    /** Valida e persiste a config; rejeita com o motivo se for inválida. */
+    setConfig: (config: GitConfig) => Promise<GitConfig>;
+    status: () => Promise<GitStatus>;
+    /** Roda add + commit (com data/hora) + push na pasta dos documentos. */
+    sync: () => Promise<GitSyncResult>;
   };
 };
 

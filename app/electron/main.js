@@ -4,6 +4,7 @@ const fs = require("fs");
 const fsp = fs.promises;
 const googleAuth = require("./googleAuth");
 const driveSync = require("./driveSync");
+const gitSync = require("./gitSync");
 
 // Empacotado, o app roda de um bundle somente-leitura (squashfs do AppImage),
 // então os desenhos ficam no diretório de documentos do usuário.
@@ -17,23 +18,28 @@ const CONFIG_FILE = path.join(app.getPath("userData"), "config.json");
 
 // Raiz dos desenhos: começa no padrão e pode ser trocada em runtime.
 let uploadsRoot = DEFAULT_UPLOADS_ROOT;
+// Config do repositório Git ({ remoteUrl, branch }).
+let gitConfig = gitSync.normalizeConfig(null);
 
 function loadConfig() {
+  let cfg = null;
   try {
-    const cfg = JSON.parse(fs.readFileSync(CONFIG_FILE, "utf8"));
-    if (cfg && typeof cfg.uploadsRoot === "string" && cfg.uploadsRoot) {
-      uploadsRoot = cfg.uploadsRoot;
-    }
+    cfg = JSON.parse(fs.readFileSync(CONFIG_FILE, "utf8"));
   } catch {
-    // sem config ou inválida: mantém o padrão
+    // sem config ou inválida: mantém os padrões
   }
+  if (cfg && typeof cfg.uploadsRoot === "string" && cfg.uploadsRoot) {
+    uploadsRoot = cfg.uploadsRoot;
+  }
+  gitConfig = gitSync.normalizeConfig(cfg?.git);
 }
 
 function saveConfig() {
   try {
+    const cfg = {};
     // só grava override quando difere do padrão
-    const cfg =
-      uploadsRoot === DEFAULT_UPLOADS_ROOT ? {} : { uploadsRoot };
+    if (uploadsRoot !== DEFAULT_UPLOADS_ROOT) cfg.uploadsRoot = uploadsRoot;
+    if (gitConfig.remoteUrl) cfg.git = gitConfig;
     fs.writeFileSync(CONFIG_FILE, JSON.stringify(cfg, null, 2), "utf8");
   } catch {
     // falha ao persistir não deve derrubar o app
@@ -399,6 +405,24 @@ function registerIpc() {
     const content = await fsp.readFile(safePath(rel), "utf8");
     return driveSync.pushFile(rel, content);
   });
+
+  // ---- sincronização com repositório Git ---------------------------------
+  ipcMain.handle("git:get-config", () => gitConfig);
+
+  ipcMain.handle("git:set-config", (_e, cfg) => {
+    const next = gitSync.normalizeConfig(cfg);
+    // valida antes de persistir (URL vazia = sync desligado, é permitido)
+    if (next.remoteUrl) gitSync.validateRemoteUrl(next.remoteUrl);
+    gitSync.validateBranch(next.branch);
+    gitConfig = next;
+    saveConfig();
+    return gitConfig;
+  });
+
+  ipcMain.handle("git:status", () => gitSync.status(uploadsRoot, gitConfig));
+
+  // roda add -> commit -> push na pasta dos documentos
+  ipcMain.handle("git:sync", () => gitSync.sync(uploadsRoot, gitConfig));
 }
 
 /**

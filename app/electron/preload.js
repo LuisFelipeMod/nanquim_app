@@ -50,4 +50,10 @@ contextBridge.exposeInMainWorld("api", {
   drive: {
     push: (rel) => ipcRenderer.invoke("drive:push", rel),
   },
+  git: {
+    getConfig: () => ipcRenderer.invoke("git:get-config"),
+    setConfig: (config) => ipcRenderer.invoke("git:set-config", config),
+    status: () => ipcRenderer.invoke("git:status"),
+    sync: () => ipcRenderer.invoke("git:sync"),
+  },
 });

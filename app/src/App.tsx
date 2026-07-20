@@ -14,6 +14,7 @@ import { PdfEditor, type AnnotScene } from "./components/PdfEditor";
 import {
   fileKind,
   type FileKind,
+  type GitStatus,
   type GoogleAuthStatus,
   type SaveStatus,
   type Tab,
@@ -90,6 +91,12 @@ export default function App() {
   const [autoSync, setAutoSync] = useState<boolean>(
     () => localStorage.getItem("drive-autosync") !== "false",
   );
+  // ---- sincronização com repositório Git ---------------------------------
+  const [gitStatus, setGitStatus] = useState<GitStatus | null>(null);
+  // campos do formulário nas configurações (só viram config ao salvar)
+  const [gitRemoteUrl, setGitRemoteUrl] = useState("");
+  const [gitBranch, setGitBranch] = useState("main");
+  const [gitBusy, setGitBusy] = useState(false);
   const [fontSize, setFontSize] = useState<number>(() => {
     const saved = Number(localStorage.getItem("ui-font-size"));
     return FONT_SIZES.some((o) => o.value === saved) ? saved : DEFAULT_FONT_SIZE;
@@ -201,6 +208,61 @@ export default function App() {
       setAuthBusy(false);
     }
   }, [toast]);
+
+  // config + estado do repositório Git
+  const refreshGitStatus = useCallback(async () => {
+    try {
+      setGitStatus(await window.api.git.status());
+    } catch (err: any) {
+      toast(`Erro ao ler o repositório Git: ${err?.message ?? err}`);
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    window.api.git
+      .getConfig()
+      .then((config) => {
+        setGitRemoteUrl(config.remoteUrl);
+        setGitBranch(config.branch);
+      })
+      .catch((err) => toast(`Erro ao ler config do Git: ${err?.message ?? err}`));
+    refreshGitStatus();
+  }, [refreshGitStatus, toast]);
+
+  const handleSaveGitConfig = useCallback(async () => {
+    setGitBusy(true);
+    try {
+      const saved = await window.api.git.setConfig({
+        remoteUrl: gitRemoteUrl.trim(),
+        branch: gitBranch.trim(),
+      });
+      setGitRemoteUrl(saved.remoteUrl);
+      setGitBranch(saved.branch);
+      await refreshGitStatus();
+      toast("Repositório Git salvo ✓");
+    } catch (err: any) {
+      toast(`Erro ao salvar repositório: ${err?.message ?? err}`);
+    } finally {
+      setGitBusy(false);
+    }
+  }, [gitRemoteUrl, gitBranch, refreshGitStatus, toast]);
+
+  const handleGitSync = useCallback(async () => {
+    setGitBusy(true);
+    try {
+      const result = await window.api.git.sync();
+      toast(
+        result.committed
+          ? `Sincronizado com ${result.branch} ✓`
+          : `Nada novo para commitar; push em ${result.branch} feito ✓`,
+      );
+    } catch (err: any) {
+      toast(`Erro ao sincronizar: ${err?.message ?? err}`);
+    } finally {
+      setGitBusy(false);
+      refreshGitStatus();
+    }
+  }, [refreshGitStatus, toast]);
 
   // carga inicial da biblioteca global
   useEffect(() => {
@@ -913,10 +975,30 @@ export default function App() {
         <button
           className="icon-btn"
           title="Configurações"
-          onClick={() => setSettingsOpen(true)}
+          onClick={() => {
+            refreshGitStatus();
+            setSettingsOpen(true);
+          }}
         >
           ⚙
         </button>
+        {gitStatus?.configured && (
+          <button
+            className="icon-btn"
+            title={
+              gitBusy
+                ? "Sincronizando com o repositório Git…"
+                : `Sincronizar com o Git (${gitStatus.branch})` +
+                  (gitStatus.pendingChanges
+                    ? ` — ${gitStatus.pendingChanges} alteração(ões)`
+                    : "")
+            }
+            disabled={gitBusy}
+            onClick={handleGitSync}
+          >
+            {gitBusy ? "⏳" : "⇅"}
+          </button>
+        )}
         {googleAuth?.configured && (
           <button
             className={`icon-btn${googleAuth.loggedIn ? " logged-in" : ""}`}
@@ -1118,6 +1200,63 @@ export default function App() {
                   </button>
                 </div>
               )}
+            </div>
+            <div className="modal-section-label">Repositório Git</div>
+            <div className="git-setting">
+              <label className="git-field">
+                <span>URL do repositório</span>
+                <input
+                  type="text"
+                  spellCheck={false}
+                  placeholder="git@github.com:usuario/repo.git"
+                  value={gitRemoteUrl}
+                  onChange={(e) => setGitRemoteUrl(e.target.value)}
+                />
+              </label>
+              <label className="git-field">
+                <span>Branch</span>
+                <input
+                  type="text"
+                  spellCheck={false}
+                  placeholder="main"
+                  value={gitBranch}
+                  onChange={(e) => setGitBranch(e.target.value)}
+                />
+              </label>
+              <p className="git-hint">
+                A pasta dos desenhos vira um repositório Git. “Sincronizar” roda{" "}
+                <code>add</code>, <code>commit</code> com a data/hora atual e{" "}
+                <code>push</code> na branch acima. As credenciais vêm do seu Git
+                (chave SSH ou credential helper).
+              </p>
+              {gitStatus && !gitStatus.error && gitStatus.isRepo && (
+                <p className="git-hint">
+                  Repositório na branch <code>{gitStatus.currentBranch}</code>,{" "}
+                  {gitStatus.pendingChanges === 0
+                    ? "sem alterações pendentes"
+                    : `${gitStatus.pendingChanges} alteração(ões) pendente(s)`}
+                  {gitStatus.lastCommit && (
+                    <>
+                      . Último commit: <code>{gitStatus.lastCommit}</code>
+                    </>
+                  )}
+                </p>
+              )}
+              {gitStatus?.error && (
+                <p className="git-hint error">{gitStatus.error}</p>
+              )}
+              <div className="dir-actions">
+                <button disabled={gitBusy} onClick={handleSaveGitConfig}>
+                  Salvar
+                </button>
+                <button
+                  className="secondary"
+                  disabled={gitBusy || !gitStatus?.configured}
+                  onClick={handleGitSync}
+                >
+                  {gitBusy ? "Sincronizando…" : "Sincronizar agora"}
+                </button>
+              </div>
             </div>
             <div className="modal-section-label">Pasta dos desenhos</div>
             <div className="dir-setting">

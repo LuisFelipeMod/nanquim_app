@@ -603,6 +603,54 @@ body,
   font-size: calc(var(--ui-font) - 3px);
 }
 
+.git-setting {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.git-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: calc(var(--ui-font) - 2px);
+  color: var(--text-muted);
+}
+
+.git-field input {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-row-active);
+  color: var(--text);
+  font-size: calc(var(--ui-font) - 1px);
+  font-family: inherit;
+}
+
+.git-field input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.git-hint {
+  margin: 0;
+  font-size: calc(var(--ui-font) - 2px);
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.git-hint.error {
+  color: #ef4444;
+}
+
+.git-hint code {
+  background: var(--bg-row-active);
+  padding: 1px 4px;
+  border-radius: 4px;
+  word-break: break-all;
+}
+
 .dir-setting {
   display: flex;
   flex-direction: column;
