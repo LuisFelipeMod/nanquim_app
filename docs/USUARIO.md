@@ -16,22 +16,63 @@ enviado para a nuvem, a menos que você ative a sincronização.
 
 ## 1. Instalação
 
+Baixe o instalador do seu sistema operacional na
+[página de releases](https://github.com/LuisFelipeMod/nanquim_app/releases)
+(sempre a versão mais recente).
+
+| Sistema | Arquivo para baixar |
+|---------|---------------------|
+| Windows | `Nanquim-Setup-*.exe` |
+| macOS | `Nanquim-*.dmg` |
+| Linux | `Nanquim-*.AppImage` ou `nanquim_*.deb` |
+
+### Windows
+1. Baixe o `Nanquim-Setup-*.exe`.
+2. Dê um duplo clique para executar o instalador.
+3. Se o **SmartScreen do Windows** aparecer ("Windows protegeu o computador"),
+   clique em **Mais informações → Executar assim mesmo** — o aviso ocorre
+   porque o instalador ainda não tem assinatura digital paga.
+4. Siga o assistente (é possível escolher a pasta de instalação). Ao final, o
+   Nanquim fica disponível no menu Iniciar.
+
+### macOS
+1. Baixe o `Nanquim-*.dmg`.
+2. Abra o `.dmg` e **arraste o Nanquim para a pasta Aplicativos**.
+3. Na primeira execução, como o app não é assinado pela Apple, o macOS pode
+   bloqueá-lo. Para abrir:
+   - Clique com o **botão direito** (ou Control+clique) no app → **Abrir** →
+     confirme em **Abrir**; ou
+   - Vá em **Ajustes do Sistema → Privacidade e Segurança** e clique em
+     **Abrir mesmo assim**.
+   > Isso só é necessário na primeira vez.
+
 ### Linux
-1. Baixe o arquivo `Nanquim-*.AppImage` (ou o `.deb`) da página de releases.
-2. Para o AppImage: dê permissão de execução e abra.
+1. Baixe o `Nanquim-*.AppImage` (portátil, roda em qualquer distribuição) ou o
+   `nanquim_*.deb` (Debian/Ubuntu e derivadas).
+2. Para o **AppImage**: dê permissão de execução e abra.
    ```bash
    chmod +x Nanquim-*.AppImage
    ./Nanquim-*.AppImage
    ```
-3. Para o `.deb`:
+3. Para o **`.deb`**:
    ```bash
    sudo dpkg -i nanquim_*.deb
+   # se faltar alguma dependência:
+   sudo apt-get install -f
    ```
 
 ### Onde ficam meus arquivos?
-Por padrão, seus documentos ficam em **`~/Documentos/Nanquim`** (ou
-`~/Documents/Nanquim`). Você pode trocar essa pasta a qualquer momento nas
-**Configurações** (veja a seção 7).
+Por padrão, seus documentos ficam em uma pasta **`Nanquim`** dentro da sua
+pasta de Documentos:
+
+| Sistema | Caminho padrão |
+|---------|----------------|
+| Windows | `C:\Users\<você>\Documents\Nanquim` |
+| macOS | `~/Documents/Nanquim` |
+| Linux | `~/Documentos/Nanquim` (ou `~/Documents/Nanquim`) |
+
+Você pode trocar essa pasta a qualquer momento nas **Configurações**
+(veja a seção 7).
 
 ---
 
