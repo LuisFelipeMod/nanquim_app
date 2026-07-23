@@ -1,0 +1,63 @@
+name: Release
+
+# Dispara ao publicar uma tag de versão (ex.: v0.1.0). Cada sistema
+# operacional é buildado no seu próprio runner (macOS só pode ser empacotado
+# no macOS) e os instaladores são anexados a uma GitHub Release.
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write # necessário para criar/atualizar a Release
+
+jobs:
+  build:
+    name: Build (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout (com submódulo do Excalidraw)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Configura Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # O editor Excalidraw é compilado a partir do código-fonte (vite resolve
+      # os pacotes via alias), então suas dependências precisam estar instaladas
+      # no node_modules do submódulo (monorepo yarn classic).
+      - name: Instala dependências do Excalidraw (submódulo)
+        working-directory: external/excalidraw
+        run: yarn install --frozen-lockfile
+
+      - name: Instala dependências do app
+        working-directory: app
+        run: npm ci
+
+      - name: Build e empacota (electron-builder)
+        working-directory: app
+        run: npm run dist
+        env:
+          # Token usado pelo electron-builder para publicação, quando aplicável.
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Evita que o build no macOS tente assinar/notarizar (sem certificado).
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+
+      - name: Publica os instaladores na Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            app/release/*.AppImage
+            app/release/*.deb
+            app/release/*.exe
+            app/release/*.dmg
+            app/release/*.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

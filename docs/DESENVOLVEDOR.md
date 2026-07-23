@@ -226,21 +226,66 @@ interceptar antes dos handlers internos do canvas do Excalidraw.
 
 ## 8. Build e distribuição
 
+Os artefatos são gerados em `app/release/`. A configuração está em
+`package.json` → `build`, com um alvo por sistema operacional:
+
+| Sistema | Alvos | Arquivo gerado |
+|---------|-------|----------------|
+| Linux | `AppImage`, `deb` | `.AppImage`, `.deb` |
+| Windows | `nsis` | instalador `.exe` (permite escolher a pasta) |
+| macOS | `dmg`, `zip` | `.dmg`, `.zip` |
+
+Os ícones `.ico` (Windows) e `.icns` (macOS) são gerados automaticamente a
+partir de `build/icon.png` (512×512).
+
+### Scripts
+
+| Script | Alvo |
+|--------|------|
+| `npm run dist` | SO atual (padrão do electron-builder) |
+| `npm run dist:linux` | Linux |
+| `npm run dist:win` | Windows |
+| `npm run dist:mac` | macOS |
+| `npm run dist:all` | Linux + Windows + macOS (`-mwl`) |
+
+### Limitações de cross-compilation
+
+O electron-builder empacota **para o SO em que roda**. Gerar para outro SO tem
+restrições:
+
+- **macOS**: o alvo `dmg`/`mac` **só pode ser construído no macOS** (ferramentas
+  e assinatura da Apple). Não é possível a partir de Linux/Windows.
+- **Windows a partir do Linux**: exige o **Wine** instalado
+  (`sudo apt install wine`); sem ele, o build NSIS falha.
+- **Linux**: gera nativamente em Linux.
+
+> **Recomendado**: para produzir os três de forma confiável, use CI com uma
+> *matrix* de sistemas operacionais (ex.: GitHub Actions rodando
+> `ubuntu-latest`, `windows-latest` e `macos-latest`), cada um executando o
+> `dist` do seu próprio SO e publicando os artefatos em uma Release.
+
+### Release automatizada (GitHub Actions)
+
+O workflow [`.github/workflows/release.yml`](../.github/workflows/release.yml)
+gera os instaladores dos três sistemas e os anexa a uma GitHub Release. Ele:
+
+1. Faz checkout **com o submódulo** do Excalidraw (`submodules: recursive`).
+2. Roda `yarn install` em `external/excalidraw` (o editor é compilado do
+   código-fonte, então suas dependências precisam estar no `node_modules` do
+   submódulo).
+3. Roda `npm ci` + `npm run dist` em `app/` no runner de cada SO.
+4. Publica `.AppImage`/`.deb`/`.exe`/`.dmg`/`.zip` na Release.
+
+Para disparar, basta criar e enviar uma tag de versão:
+
 ```bash
-cd app
-npm run dist
+git tag v0.1.0
+git push p v0.1.0   # "p" é o nome do remote deste repositório
 ```
 
-Gera os artefatos em `app/release/`. A configuração está em
-`package.json` → `build`:
-
-- `appId`: `com.luismodesto.nanquim`
-- **Linux**: alvos `AppImage` e `deb`, categoria *Graphics*, ícone em
-  `build/icon.png`.
-- Arquivos empacotados: `dist/**` (renderer buildado) e `electron/**`.
-
-> Para adicionar alvos Windows/macOS, estenda o bloco `build` conforme a
-> documentação do `electron-builder`.
+> O macOS é buildado **sem assinatura** (`CSC_IDENTITY_AUTO_DISCOVERY=false`);
+> usuários verão um aviso do Gatekeeper. Para assinar/notarizar, configure um
+> certificado Apple Developer e as secrets correspondentes no repositório.
 
 ---
 
