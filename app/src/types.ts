@@ -19,6 +19,12 @@ export function stripExt(name: string): string {
   return name.replace(/\.(excalidraw|md|pdf)$/, "");
 }
 
+/** Emoji usado como ícone do arquivo (árvore, busca rápida). */
+export function fileIcon(path: string): string {
+  const kind = fileKind(path);
+  return kind === "markdown" ? "📝" : kind === "pdf" ? "📕" : "📄";
+}
+
 export type SaveStatus = "saved" | "dirty" | "saving" | "error";
 
 export type Tab = {

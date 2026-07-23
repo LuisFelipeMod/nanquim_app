@@ -11,6 +11,7 @@ import { Sidebar } from "./components/Sidebar";
 import { TabBar } from "./components/TabBar";
 import { MarkdownEditor } from "./components/MarkdownEditor";
 import { PdfEditor, type AnnotScene } from "./components/PdfEditor";
+import { QuickOpen } from "./components/QuickOpen";
 import {
   fileKind,
   type FileKind,
@@ -80,6 +81,7 @@ export default function App() {
   const [toasts, setToasts] = useState<{ id: number; text: string }[]>([]);
   const [theme, setTheme] = useState<Theme>(systemTheme);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [quickOpenOpen, setQuickOpenOpen] = useState(false);
   const [dirInfo, setDirInfo] = useState<{
     path: string;
     isDefault: boolean;
@@ -119,6 +121,20 @@ export default function App() {
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
   }, [theme]);
+
+  // Ctrl/Cmd+P abre a busca rápida de arquivos. Escuta na fase de captura para
+  // pegar o atalho antes dos handlers do editor (canvas do Excalidraw etc.).
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return;
+      if (e.key.toLowerCase() !== "p") return;
+      e.preventDefault();
+      e.stopPropagation();
+      setQuickOpenOpen(true);
+    };
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, []);
 
   const scenes = useRef(new Map<string, Scene>());
   // documentos markdown abertos: texto atual e último texto salvo
@@ -1138,6 +1154,16 @@ export default function App() {
           )}
         </div>
       </div>
+      {quickOpenOpen && (
+        <QuickOpen
+          tree={tree}
+          onClose={() => setQuickOpenOpen(false)}
+          onSelect={(path) => {
+            setQuickOpenOpen(false);
+            openFile(path);
+          }}
+        />
+      )}
       {settingsOpen && (
         <div className="modal-overlay" onClick={() => setSettingsOpen(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>

@@ -7,7 +7,7 @@ app/release/
 # Tem .git próprio e não pode ser commitado como arquivos normais.
 # Recomendado: adicionar como git submodule
 #   git submodule add https://github.com/excalidraw/excalidraw external/excalidraw
-external/excalidraw/
+# external/excalidraw/
 
 # --- dados do usuário (desenhos locais, não pertencem ao repositório) ---
 uploads/*

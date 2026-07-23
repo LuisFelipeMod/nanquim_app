@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { fileKind, stripExt, type FileKind, type TreeNode } from "../types";
+import { fileIcon, stripExt, type FileKind, type TreeNode } from "../types";
 
 type MenuState = {
   x: number;
@@ -126,13 +126,7 @@ export function Sidebar(props: SidebarProps) {
         onContextMenu={(e) => openMenu(e, node)}
         onDragStart={(e) => e.dataTransfer.setData("text/plain", node.path)}
       >
-        <span className="tree-icon">
-          {fileKind(node.path) === "markdown"
-            ? "📝"
-            : fileKind(node.path) === "pdf"
-              ? "📕"
-              : "📄"}
-        </span>
+        <span className="tree-icon">{fileIcon(node.path)}</span>
         {isRenaming ? (
           <RenameInput
             initial={stripExt(node.name)}
