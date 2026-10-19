@@ -38,6 +38,46 @@ const DEFAULT_FONT_SIZE = 14;
 
 type Theme = "light" | "dark";
 
+/**
+ * Troca referências `.Antigo.assets/` por `.Novo.assets/`.
+ * Espelha rewriteAssetRefs em electron/markdownAssets.js: se o novo caminho
+ * tem espaço ou parênteses, o destino markdown ganha `<...>`.
+ */
+function rewriteAssetRefs(content: string, oldBase: string, newBase: string) {
+  if (!oldBase || oldBase === newBase) return content;
+  const from = `.${oldBase}.assets/`;
+  const to = `.${newBase}.assets/`;
+  const needsQuote = /[\s()]/.test(to);
+  let out = "";
+  let i = 0;
+  while (i < content.length) {
+    const at = content.indexOf(from, i);
+    if (at === -1) {
+      out += content.slice(i);
+      break;
+    }
+    const before = content.slice(Math.max(0, at - 200), at);
+    const bare = /!?\[[^\]]*\]\($/.test(before);
+    out += content.slice(i, at);
+    if (bare && needsQuote) {
+      const rest = content.slice(at + from.length);
+      const endRel = rest.indexOf(")");
+      out += `<${to}`;
+      if (endRel === -1) {
+        out += rest;
+        i = content.length;
+      } else {
+        out += `${rest.slice(0, endRel)}>)`;
+        i = at + from.length + endRel + 1;
+      }
+    } else {
+      out += to;
+      i = at + from.length;
+    }
+  }
+  return out;
+}
+
 const systemTheme = (): Theme =>
   window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 
@@ -739,6 +779,25 @@ export default function App() {
     }
   }, [tabs, closeTab]);
 
+  /**
+   * Após renomear o markdown, as imagens passam a viver em `.Novo.assets`.
+   * O texto aberto precisa acompanhar, senão o próximo save regrava o caminho antigo.
+   */
+  function rewriteOpenAssetRefs(
+    oldPath: string,
+    newPath: string,
+    doc: { text: string; savedText: string },
+  ) {
+    if (!oldPath.endsWith(".md") || !newPath.endsWith(".md")) return doc;
+    const oldBase = oldPath.split("/").pop()?.replace(/\.md$/, "") ?? "";
+    const newBase = newPath.split("/").pop()?.replace(/\.md$/, "") ?? "";
+    if (!oldBase || oldBase === newBase) return doc;
+    return {
+      text: rewriteAssetRefs(doc.text, oldBase, newBase),
+      savedText: rewriteAssetRefs(doc.savedText, oldBase, newBase),
+    };
+  }
+
   /** Ajusta caminhos de abas/cenas abertas após rename/move. */
   const remapOpenPaths = useCallback((oldPath: string, newPath: string) => {
     const remap = (p: string) =>
@@ -753,7 +812,10 @@ export default function App() {
     scenes.current = newScenes;
 
     const newDocs = new Map<string, { text: string; savedText: string }>();
-    for (const [p, doc] of mdDocs.current) newDocs.set(remap(p), doc);
+    for (const [p, doc] of mdDocs.current) {
+      const np = remap(p);
+      newDocs.set(np, rewriteOpenAssetRefs(p, np, doc));
+    }
     mdDocs.current = newDocs;
 
     const newPdfs = new Map<string, PdfDoc>();

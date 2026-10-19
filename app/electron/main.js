@@ -1,10 +1,18 @@
 const { app, BrowserWindow, ipcMain, shell, net, dialog } = require("electron");
 const path = require("path");
 const fs = require("fs");
+const os = require("os");
 const fsp = fs.promises;
 const googleAuth = require("./googleAuth");
 const driveSync = require("./driveSync");
 const gitSync = require("./gitSync");
+const {
+  IMAGE_MIME,
+  markdownBase,
+  assetsDir,
+  rewriteAssetRefs,
+  inlineImages,
+} = require("./markdownAssets");
 
 // Empacotado, o app roda de um bundle somente-leitura (squashfs do AppImage),
 // então os desenhos ficam no diretório de documentos do usuário.
@@ -117,6 +125,70 @@ async function moveSidecar(srcPdfAbs, destPdfAbs) {
   if (await exists(src)) {
     await fsp.rename(src, sidecarPath(destPdfAbs)).catch(() => {});
   }
+}
+
+/** Move a pasta de imagens do markdown e atualiza as referências no texto. */
+async function moveMarkdownAssets(srcMdAbs, destMdAbs) {
+  if (!srcMdAbs.endsWith(".md") || !destMdAbs.endsWith(".md")) return;
+  const srcDir = assetsDir(srcMdAbs);
+  const destDir = assetsDir(destMdAbs);
+  if (srcDir !== destDir && (await exists(srcDir))) {
+    if (await exists(destDir)) {
+      await fsp.cp(srcDir, destDir, { recursive: true });
+      await fsp.rm(srcDir, { recursive: true, force: true });
+    } else {
+      await fsp.rename(srcDir, destDir);
+    }
+  }
+  const current = await fsp.readFile(destMdAbs, "utf8");
+  const next = rewriteAssetRefs(
+    current,
+    markdownBase(srcMdAbs),
+    markdownBase(destMdAbs),
+  );
+  if (next !== current) await atomicWrite(destMdAbs, next);
+}
+
+/** Copia a pasta de imagens e reescreve as referências na cópia do markdown. */
+async function copyMarkdownAssets(srcMdAbs, destMdAbs) {
+  const srcDir = assetsDir(srcMdAbs);
+  if (await exists(srcDir)) {
+    await fsp.cp(srcDir, assetsDir(destMdAbs), { recursive: true });
+  }
+  const content = await fsp.readFile(destMdAbs, "utf8");
+  const next = rewriteAssetRefs(
+    content,
+    markdownBase(srcMdAbs),
+    markdownBase(destMdAbs),
+  );
+  if (next !== content) await atomicWrite(destMdAbs, next);
+}
+
+async function removeMarkdownAssets(mdAbs) {
+  await fsp.rm(assetsDir(mdAbs), { recursive: true, force: true }).catch(() => {});
+}
+
+/** Baixa uma imagem http(s) e devolve data URI, ou null se não for imagem. */
+async function fetchImageDataUri(url) {
+  const res = await net.fetch(url);
+  if (!res.ok) return null;
+  const mime = (res.headers.get("content-type") || "")
+    .split(";")[0]
+    .trim()
+    .toLowerCase();
+  if (!mime.startsWith("image/")) return null;
+  const buf = Buffer.from(await res.arrayBuffer());
+  return `data:${mime};base64,${buf.toString("base64")}`;
+}
+
+function imageInlineOptions(mdAbs) {
+  return {
+    baseDir: path.dirname(mdAbs),
+    uploadsRoot,
+    readFile: (abs) => fsp.readFile(abs),
+    fetchUrl: fetchImageDataUri,
+    embedRemote: true,
+  };
 }
 
 async function scanDir(dir) {
@@ -350,6 +422,7 @@ function registerIpc() {
     if (await exists(dest)) throw new Error(`Já existe: ${newName}`);
     await fsp.rename(src, dest);
     if (src.endsWith(".pdf")) await moveSidecar(src, dest);
+    if (src.endsWith(".md")) await moveMarkdownAssets(src, dest);
     return relPath(dest);
   });
 
@@ -366,6 +439,7 @@ function registerIpc() {
     }
     await fsp.rename(src, dest);
     if (src.endsWith(".pdf")) await moveSidecar(src, dest);
+    if (src.endsWith(".md")) await moveMarkdownAssets(src, dest);
     return relPath(dest);
   });
 
@@ -375,6 +449,7 @@ function registerIpc() {
     if (abs.endsWith(".pdf")) {
       await fsp.rm(sidecarPath(abs), { force: true }).catch(() => {});
     }
+    if (abs.endsWith(".md")) await removeMarkdownAssets(abs);
   });
 
   ipcMain.handle("fs:duplicate", async (_e, rel) => {
@@ -390,7 +465,42 @@ function registerIpc() {
         await fsp.copyFile(srcSide, sidecarPath(abs)).catch(() => {});
       }
     }
+    if (ext === ".md") await copyMarkdownAssets(src, abs);
     return relPath(abs);
+  });
+
+  // copia a imagem para `.Nome.assets` e devolve o caminho relativo ao markdown
+  ipcMain.handle("md:attach-image", async (_e, rel) => {
+    const mdAbs = safePath(rel);
+    if (!mdAbs.endsWith(".md")) throw new Error("Não é um markdown");
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: "Anexar imagem",
+      properties: ["openFile"],
+      filters: [
+        {
+          name: "Imagens",
+          extensions: ["png", "jpg", "jpeg", "gif", "webp", "svg"],
+        },
+      ],
+    });
+    if (result.canceled || result.filePaths.length === 0) return null;
+    const source = result.filePaths[0];
+    const ext = path.extname(source).toLowerCase();
+    if (!IMAGE_MIME[ext]) throw new Error("Formato de imagem não suportado");
+    const dir = assetsDir(mdAbs);
+    await fsp.mkdir(dir, { recursive: true });
+    const base = path.basename(source, path.extname(source));
+    const dest = await uniquePath(dir, base, ext);
+    await fsp.copyFile(source, dest);
+    return {
+      src: `.${markdownBase(mdAbs)}.assets/${path.basename(dest)}`,
+      alt: base,
+    };
+  });
+
+  ipcMain.handle("md:inline-images", async (_e, rel, html) => {
+    const mdAbs = safePath(rel);
+    return inlineImages(String(html ?? ""), imageInlineOptions(mdAbs));
   });
 
   ipcMain.handle("md:export-pdf", (_e, rel, html) => exportPdf(rel, html));
@@ -427,9 +537,11 @@ function registerIpc() {
 
 /**
  * Gera um PDF a partir de um documento HTML já estilizado (renderizado do
- * markdown no renderer). Abre um diálogo de "Salvar como" e imprime numa
- * janela oculta via webContents.printToPDF. Retorna o caminho salvo ou null
- * se o usuário cancelar.
+ * markdown no renderer). Imagens locais e remotas são embutidas como data URI
+ * antes da impressão, então o PDF continua com a imagem mesmo se o arquivo
+ * de origem for apagado depois. Abre um diálogo de "Salvar como" e imprime
+ * numa janela oculta via webContents.printToPDF. Retorna o caminho salvo ou
+ * null se o usuário cancelar.
  */
 async function exportPdf(rel, html) {
   const abs = safePath(rel);
@@ -442,14 +554,18 @@ async function exportPdf(rel, html) {
   });
   if (result.canceled || !result.filePath) return null;
 
+  const inlined = await inlineImages(String(html ?? ""), imageInlineOptions(abs));
+  const tmp = path.join(
+    os.tmpdir(),
+    `nanquim-pdf-${process.pid}-${Date.now()}.html`,
+  );
   const pdfWin = new BrowserWindow({
     show: false,
     webPreferences: { sandbox: true, javascript: false },
   });
   try {
-    await pdfWin.loadURL(
-      "data:text/html;charset=utf-8," + encodeURIComponent(html),
-    );
+    await fsp.writeFile(tmp, inlined, "utf8");
+    await pdfWin.loadFile(tmp);
     const pdf = await pdfWin.webContents.printToPDF({
       printBackground: true,
       pageSize: "A4",
@@ -464,6 +580,7 @@ async function exportPdf(rel, html) {
     await fsp.writeFile(result.filePath, pdf);
     return result.filePath;
   } finally {
+    await fsp.rm(tmp, { force: true }).catch(() => {});
     if (!pdfWin.isDestroyed()) pdfWin.destroy();
   }
 }

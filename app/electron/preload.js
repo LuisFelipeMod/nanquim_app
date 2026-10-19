@@ -22,6 +22,9 @@ contextBridge.exposeInMainWorld("api", {
   duplicateFile: (rel) => ipcRenderer.invoke("fs:duplicate", rel),
   exportMarkdownPdf: (rel, html) =>
     ipcRenderer.invoke("md:export-pdf", rel, html),
+  attachMarkdownImage: (rel) => ipcRenderer.invoke("md:attach-image", rel),
+  inlineMarkdownImages: (rel, html) =>
+    ipcRenderer.invoke("md:inline-images", rel, html),
   onFsChanged: (callback) => {
     const listener = () => callback();
     ipcRenderer.on("fs:changed", listener);

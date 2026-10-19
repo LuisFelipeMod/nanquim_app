@@ -97,6 +97,12 @@ export type ElectronAPI = {
   duplicateFile: (rel: string) => Promise<string>;
   /** Exporta o HTML renderizado como PDF; resolve com o caminho salvo ou null. */
   exportMarkdownPdf: (rel: string, html: string) => Promise<string | null>;
+  /** Copia uma imagem para `.Nome.assets` e devolve o caminho relativo ao markdown. */
+  attachMarkdownImage: (
+    rel: string,
+  ) => Promise<{ src: string; alt: string } | null>;
+  /** Troca src de imagens locais/remotas do HTML por data URI. */
+  inlineMarkdownImages: (rel: string, html: string) => Promise<string>;
   onFsChanged: (callback: () => void) => () => void;
   libraryGet: () => Promise<string | null>;
   librarySave: (json: string) => Promise<void>;

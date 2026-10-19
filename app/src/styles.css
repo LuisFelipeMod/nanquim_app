@@ -868,6 +868,66 @@ body,
   border-bottom: 1px solid var(--border);
 }
 
+.md-insert {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.md-insert button {
+  padding: 3px 8px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: calc(var(--ui-font) - 1px);
+  font-family: inherit;
+}
+
+.md-insert button:hover:not(:disabled) {
+  background: var(--bg-menu-hover);
+  color: var(--text);
+}
+
+.md-insert button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.md-insert-sep {
+  width: 1px;
+  align-self: stretch;
+  margin: 4px 4px;
+  background: var(--border);
+}
+
+.md-insert button[title="Negrito"] {
+  font-weight: 700;
+}
+
+.md-insert button[title="Itálico"] {
+  font-style: italic;
+}
+
+.md-insert button[title="Riscado"] {
+  text-decoration: line-through;
+}
+
+.md-insert button[title="Código"],
+.md-insert button[title="Bloco de código"] {
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+}
+
+.md-insert-notice {
+  margin-left: 8px;
+  color: var(--danger);
+  font-size: calc(var(--ui-font) - 2px);
+}
+
 .md-export-btn {
   margin-left: auto;
   padding: 5px 14px;
