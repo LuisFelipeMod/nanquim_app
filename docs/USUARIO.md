@@ -177,8 +177,9 @@ apenas no seu computador.
 
 ### Git
 1. Nas Configurações, informe a **URL do repositório** (remote) e a **branch**.
-2. Use a ação de **sincronizar**: o Nanquim faz `add` + `commit` (com data e
-   hora) + `push` da sua pasta de documentos.
+2. Use a ação de **sincronizar**: o Nanquim commita alterações locais (`add` +
+   `commit` com data e hora), faz `pull --rebase` e só então `push` da pasta
+   de documentos. Se o pull falhar (conflito ou rede), o push não é feito.
 3. O painel mostra o **status**: se é um repositório, quantas alterações estão
    pendentes e o último commit.
 

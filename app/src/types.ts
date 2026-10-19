@@ -66,7 +66,7 @@ export type GitStatus = GitConfig & {
 };
 
 export type GitSyncResult = {
-  /** false quando não havia nada novo para commitar (só houve push). */
+  /** false quando não havia nada novo para commitar. */
   committed: boolean;
   message: string | null;
   branch: string;
@@ -126,7 +126,7 @@ export type ElectronAPI = {
     /** Valida e persiste a config; rejeita com o motivo se for inválida. */
     setConfig: (config: GitConfig) => Promise<GitConfig>;
     status: () => Promise<GitStatus>;
-    /** Roda add + commit (com data/hora) + push na pasta dos documentos. */
+    /** Commita o que mudou, faz pull --rebase e só então push. */
     sync: () => Promise<GitSyncResult>;
   };
 };

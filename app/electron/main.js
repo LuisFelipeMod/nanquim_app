@@ -531,7 +531,7 @@ function registerIpc() {
 
   ipcMain.handle("git:status", () => gitSync.status(uploadsRoot, gitConfig));
 
-  // roda add -> commit -> push na pasta dos documentos
+  // commit (se houver) -> pull --rebase -> push na pasta dos documentos
   ipcMain.handle("git:sync", () => gitSync.sync(uploadsRoot, gitConfig));
 }
 

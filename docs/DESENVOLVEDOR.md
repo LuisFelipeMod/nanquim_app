@@ -31,7 +31,7 @@ Requer **Node.js 20+**.
 │   │   ├── preload.js        # Ponte contextBridge (window.api)
 │   │   ├── googleAuth.js     # OAuth Google (login)
 │   │   ├── driveSync.js      # Upload para o Google Drive
-│   │   └── gitSync.js        # add/commit/push da pasta de documentos
+│   │   └── gitSync.js        # commit, pull --rebase e push da pasta de documentos
 │   ├── src/                  # Renderer (React)
 │   │   ├── App.tsx           # Componente raiz: estado global, abas, IPC
 │   │   ├── main.tsx          # Entry point React
@@ -203,7 +203,7 @@ ou renomear o PDF.
 | `drive.push(rel)` | `drive:push` | Upload do documento (`driveSync.js`) |
 | `git.getConfig/setConfig(cfg)` | `git:get-config` / `git:set-config` | Config `{ remoteUrl, branch }` |
 | `git.status()` | `git:status` | Estado do repo (pendências, último commit) |
-| `git.sync()` | `git:sync` | `add` + `commit` (data/hora) + `push` |
+| `git.sync()` | `git:sync` | `add` + `commit` (data/hora, se houver) + `pull --rebase` + `push` |
 
 ---
 

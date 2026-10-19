@@ -1312,10 +1312,11 @@ export default function App() {
                 />
               </label>
               <p className="git-hint">
-                A pasta dos desenhos vira um repositório Git. “Sincronizar” roda{" "}
-                <code>add</code>, <code>commit</code> com a data/hora atual e{" "}
-                <code>push</code> na branch acima. As credenciais vêm do seu Git
-                (chave SSH ou credential helper).
+                A pasta dos desenhos vira um repositório Git. “Sincronizar”
+                commita alterações locais (data/hora), roda{" "}
+                <code>pull --rebase</code> e só então faz <code>push</code> na
+                branch acima. Se o pull falhar, o push não é feito. As
+                credenciais vêm do seu Git (chave SSH ou credential helper).
               </p>
               {gitStatus && !gitStatus.error && gitStatus.isRepo && (
                 <p className="git-hint">

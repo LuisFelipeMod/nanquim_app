@@ -1,11 +1,12 @@
-// Sincronização com um repositório Git (espelho: local -> remoto).
+// Sincronização com um repositório Git (local <-> remoto).
 //
 // A pasta dos documentos vira um repositório Git comum. Ao sincronizar,
-// rodamos na máquina do usuário: add -> commit (com data/hora) -> push.
+// rodamos na máquina do usuário: add -> commit (com data/hora, se houver
+// mudança) -> pull --rebase -> push. Se o pull falhar, o push não roda.
 //
 // Credenciais são responsabilidade do ambiente do usuário (SSH agent,
 // credential helper do git). O prompt interativo é desligado — sem
-// credencial configurada o push falha com mensagem em vez de travar o app.
+// credencial configurada o pull/push falha com mensagem em vez de travar o app.
 
 const { execFile } = require("child_process");
 const path = require("path");
@@ -139,13 +140,16 @@ async function ensureIdentity(dir) {
   await gitOk(["config", "user.name", FALLBACK_AUTHOR_NAME], dir);
 }
 
+// O remote configurado é sempre publicado com este nome.
+const REMOTE_NAME = "origin";
+
 /** Cria ou atualiza o remote "origin" para a URL configurada. */
 async function ensureRemote(dir, remoteUrl) {
-  const current = await git(["remote", "get-url", "origin"], dir);
+  const current = await git(["remote", "get-url", REMOTE_NAME], dir);
   if (current.code !== 0) {
-    await gitOk(["remote", "add", "origin", remoteUrl], dir);
+    await gitOk(["remote", "add", REMOTE_NAME, remoteUrl], dir);
   } else if (current.stdout.trim() !== remoteUrl) {
-    await gitOk(["remote", "set-url", "origin", remoteUrl], dir);
+    await gitOk(["remote", "set-url", REMOTE_NAME, remoteUrl], dir);
   }
 }
 
@@ -213,10 +217,64 @@ async function status(dir, rawConfig) {
   return info;
 }
 
+/** true enquanto um rebase iniciado pelo pull ainda não terminou. */
+async function rebaseInProgress(dir) {
+  for (const name of ["rebase-merge", "rebase-apply"]) {
+    try {
+      await fsp.access(path.join(dir, ".git", name));
+      return true;
+    } catch {
+      // esse estado de rebase não está ativo
+    }
+  }
+  return false;
+}
+
 /**
- * add -> commit -> push. Retorna o que aconteceu para a UI dar o retorno
- * certo ("nada a commitar" não é erro: ainda pode haver commit pendente
- * de push de uma tentativa anterior que falhou).
+ * O remoto ainda não tem a branch (primeiro envio). Não é conflito nem
+ * falha de rede: não há o que puxar.
+ */
+function isMissingRemoteBranch(detail) {
+  return /couldn'?t find remote ref/i.test(detail);
+}
+
+/**
+ * `git pull --rebase <remote> <branch>` antes do push. Em conflito, cancela
+ * o rebase (não interativo) para não deixar a pasta no meio da operação.
+ * Lança se o pull falhar por conflito, rede ou outro erro — o chamador
+ * não deve fazer push nesse caso.
+ */
+async function pullRebase(dir, branch) {
+  const res = await git(["pull", "--rebase", REMOTE_NAME, branch], dir);
+  if (res.code === 0) return;
+
+  const detail = (res.stderr || res.stdout || "").trim();
+  const conflicted = await rebaseInProgress(dir);
+  if (conflicted) {
+    const abort = await git(["rebase", "--abort"], dir);
+    if (abort.code !== 0) {
+      const abortDetail = (abort.stderr || abort.stdout || "").trim();
+      throw new Error(
+        `Conflito no git pull --rebase e o rebase não pôde ser cancelado; o push não foi feito. ${detail}${abortDetail ? ` ${abortDetail}` : ""}`,
+      );
+    }
+  }
+
+  if (!conflicted && isMissingRemoteBranch(detail)) return;
+
+  throw new Error(
+    conflicted
+      ? `Conflito no git pull --rebase; o rebase foi cancelado e o push não foi feito. ${detail || `código ${res.code}`}`
+      : `git pull --rebase falhou; o push não foi feito. ${detail || `código ${res.code}`}`,
+  );
+}
+
+/**
+ * add -> commit (se houver mudança) -> pull --rebase -> push. Retorna o
+ * que aconteceu para a UI dar o retorno certo ("nada a commitar" não é
+ * erro: ainda pode haver commit pendente de push de uma tentativa anterior
+ * que falhou). O push só roda se o pull terminar bem ou não houver branch
+ * remota para puxar.
  */
 async function sync(dir, rawConfig) {
   if (syncing) throw new Error("Já existe uma sincronização em andamento.");
@@ -244,7 +302,8 @@ async function sync(dir, rawConfig) {
       committed = true;
     }
 
-    await gitOk(["push", "origin", branch], dir);
+    await pullRebase(dir, branch);
+    await gitOk(["push", REMOTE_NAME, branch], dir);
     return { committed, message, branch };
   } finally {
     syncing = false;
